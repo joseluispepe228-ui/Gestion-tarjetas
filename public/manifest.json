@@ -1,0 +1,17 @@
+{
+  "short_name": "Gestion Tarjetas",
+  "name": "Gestion Tarjetas De Credito",
+  "description": "Aplicación para el registro de compras, control de cuotas de tarjetas de crédito y detalle de gastos.",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "portrait"
+}

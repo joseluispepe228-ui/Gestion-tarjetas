@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, loadAppState, saveAppState, resetAppStateToSeed, exportBackupJSON } from './lib/storage';
-import { Purchase, MonthlyStatement, AdminFeeAllocation, Responsible, CreditCard } from './types';
+import { Purchase, MonthlyStatement, AdminFeeAllocation, Responsible, CreditCard, NewPurchase } from './types';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { IngresoCompras } from './components/IngresoCompras';
 import { IngresoEstadoCuenta } from './components/IngresoEstadoCuenta';
 import { GastosAdministrativos } from './components/GastosAdministrativos';
 import { GestionResponsables } from './components/GestionResponsables';
 import { Reportes } from './components/Reportes';
+import { NuevasCompras } from './components/NuevasCompras';
 import {
   isFirebaseConfigured,
   subscribeToFirestoreData,
@@ -16,6 +17,8 @@ import {
   syncAdminFeeToFirestore,
   syncResponsibleToFirestore,
   deleteResponsibleFromFirestore,
+  syncNewPurchaseToFirestore,
+  deleteNewPurchaseFromFirestore,
 } from './lib/firebase';
 
 export default function App() {
@@ -38,6 +41,7 @@ export default function App() {
         purchases: data.purchases || prev.purchases,
         statements: data.statements || prev.statements,
         adminFees: data.adminFees || prev.adminFees,
+        newPurchases: data.newPurchases || prev.newPurchases,
       }));
     });
 
@@ -161,6 +165,37 @@ export default function App() {
     }
   };
 
+  // Handlers for Module 6 (Nuevas Compras / Bitácora)
+  const handleAddNewPurchase = (p: NewPurchase) => {
+    setAppState((prev) => ({
+      ...prev,
+      newPurchases: [p, ...(prev.newPurchases || [])],
+    }));
+    syncNewPurchaseToFirestore(p);
+  };
+
+  const handleUpdateNewPurchase = (updated: NewPurchase) => {
+    setAppState((prev) => ({
+      ...prev,
+      newPurchases: (prev.newPurchases || []).map((p) => (p.id === updated.id ? updated : p)),
+    }));
+    syncNewPurchaseToFirestore(updated);
+  };
+
+  const handleDeleteNewPurchase = (id: string) => {
+    if (window.confirm('¿Deseas eliminar este registro de compra de la bitácora?')) {
+      setAppState((prev) => ({
+        ...prev,
+        newPurchases: (prev.newPurchases || []).filter((p) => p.id !== id),
+      }));
+      deleteNewPurchaseFromFirestore(id);
+    }
+  };
+
+  const handleConvertToModule1 = (p: Purchase) => {
+    handleAddPurchase(p);
+  };
+
   const handleExportBackup = () => {
     exportBackupJSON(appState);
   };
@@ -226,6 +261,18 @@ export default function App() {
             purchases={appState.purchases}
             statements={appState.statements}
             adminFees={appState.adminFees}
+          />
+        )}
+
+        {activeTab === 'nuevas-compras' && (
+          <NuevasCompras
+            cards={appState.cards}
+            responsibles={appState.responsibles}
+            newPurchases={appState.newPurchases || []}
+            onAddNewPurchase={handleAddNewPurchase}
+            onUpdateNewPurchase={handleUpdateNewPurchase}
+            onDeleteNewPurchase={handleDeleteNewPurchase}
+            onConvertToModule1={handleConvertToModule1}
           />
         )}
       </main>

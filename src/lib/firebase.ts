@@ -9,7 +9,10 @@ import {
   onSnapshot,
   query,
 } from 'firebase/firestore';
-import { CreditCard, Responsible, Purchase, MonthlyStatement, AdminFeeAllocation } from '../types';
+import { CreditCard, Responsible, Purchase, MonthlyStatement, AdminFeeAllocation, NewPurchase } from '../types';
+
+// ... (keep rest)
+
 // Safely load applet config if present in the environment (e.g. AI Studio container)
 let appletConfig: Record<string, string> = {};
 try {
@@ -57,6 +60,7 @@ export function subscribeToFirestoreData(onUpdate: (data: {
   purchases?: Purchase[];
   statements?: MonthlyStatement[];
   adminFees?: AdminFeeAllocation[];
+  newPurchases?: NewPurchase[];
 }) => void) {
   if (!db) return () => {};
 
@@ -89,12 +93,18 @@ export function subscribeToFirestoreData(onUpdate: (data: {
     onUpdate({ adminFees });
   }, (err) => console.warn('Firestore adminFees listener warning:', err));
 
+  const unsubNewPurchases = onSnapshot(collection(db, 'newPurchases'), (snapshot) => {
+    const newPurchases = snapshot.docs.map((doc) => doc.data() as NewPurchase);
+    onUpdate({ newPurchases });
+  }, (err) => console.warn('Firestore newPurchases listener warning:', err));
+
   return () => {
     unsubCards();
     unsubResp();
     unsubPurchases();
     unsubStatements();
     unsubFees();
+    unsubNewPurchases();
   };
 }
 
@@ -161,3 +171,22 @@ export async function syncCardToFirestore(card: CreditCard) {
     console.error('Error syncing card to Firestore:', error);
   }
 }
+
+export async function syncNewPurchaseToFirestore(p: NewPurchase) {
+  if (!db) return;
+  try {
+    await setDoc(doc(db, 'newPurchases', p.id), p);
+  } catch (error) {
+    console.error('Error syncing new purchase to Firestore:', error);
+  }
+}
+
+export async function deleteNewPurchaseFromFirestore(id: string) {
+  if (!db) return;
+  try {
+    await deleteDoc(doc(db, 'newPurchases', id));
+  } catch (error) {
+    console.error('Error deleting new purchase from Firestore:', error);
+  }
+}
+

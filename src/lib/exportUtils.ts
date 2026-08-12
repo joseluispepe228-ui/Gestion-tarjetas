@@ -97,7 +97,7 @@ export function generateExcelReport({
 
   // Generate file name
   const respName = responsible ? responsible.name.replace(/\s+/g, '_') : 'Todos';
-  const fileName = `Conciliacion_${formatMonthYear(month)}_${respName}.xlsx`;
+  const fileName = `Detalle_Cobro_${formatMonthYear(month)}_${respName}.xlsx`;
 
   XLSX.writeFile(wb, fileName);
 }
@@ -128,16 +128,16 @@ export function generatePDFReport({
   doc.setDrawColor(226, 232, 240); // slate-200
   doc.line(0, 42, 210, 42);
 
-  // Title
+  // Title - Reduced font size and removed 'CONCILIACIÓN' as requested
   doc.setTextColor(30, 41, 59); // slate-800
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('CONCILIACIÓN Y DETALLE DE COBRO', 14, 18);
+  doc.setFontSize(15);
+  doc.text('DETALLE DE COBRO', 14, 18);
 
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 116, 139); // slate-500
-  doc.text('Control de Tarjetas de Crédito Familiares', 14, 25);
+  doc.text('Gestion Tarjetas De Credito', 14, 25);
   doc.text(`Fecha de Emisión: ${new Date().toLocaleDateString('es-CL')}`, 14, 31);
 
   // Filter Details Box

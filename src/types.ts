@@ -30,6 +30,7 @@ export interface Purchase {
   installmentAmount: number; // Calculated or manual
   responsibleId: string;
   percentageToPay: number; // 100 by default, or fraction (e.g., 50 for 50%)
+  receiptUrl?: string; // Base64 data URL or photo URL of the purchase receipt/boleta
   notes?: string;
   createdAt: string;
 }
@@ -69,3 +70,17 @@ export interface ReconciliationSummary {
   allocatedAdminFeesTotal: number;
   unallocatedAdminFees: number;
 }
+
+export interface NewPurchase {
+  id: string;
+  purchaseDate: string; // YYYY-MM-DD
+  cardId: string;
+  totalAmount: number;
+  responsibleId: string;
+  installmentsCount: number;
+  receiptUrl?: string; // Photo or Base64 of receipt/boleta
+  description: string;
+  notes?: string;
+  createdAt: string;
+}
+

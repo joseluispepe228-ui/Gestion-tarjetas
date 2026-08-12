@@ -109,9 +109,9 @@ export const Reportes: React.FC<ReportesProps> = ({
         <div>
           <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm mb-1">
             <BarChart3 className="w-4 h-4" />
-            <span>Módulo 5</span>
+            <span>Módulo 5: Reportes y Cobros</span>
           </div>
-          <h2 className="text-xl font-bold text-slate-800">Reporte y Conciliación Final</h2>
+          <h2 className="text-xl font-bold text-slate-800">Reporte de Gastos y Cobro</h2>
           <p className="text-sm text-slate-500">
             Filtra por mes y familiar responsable para obtener el desglose detallado de cuotas y generar PDF o Excel.
           </p>

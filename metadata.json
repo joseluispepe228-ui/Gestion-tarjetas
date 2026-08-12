@@ -1,6 +1,6 @@
 {
-  "name": "Control de Tarjetas de Crédito",
-  "description": "Aplicación para el control de tarjetas de crédito compartidas en familia, cálculo de cuotas mensuales, conciliación de estados de cuenta, asignación de gastos administrativos y generación de reportes en PDF y Excel.",
-  "requestFramePermissions": [],
+  "name": "Gestion Tarjetas De Credito",
+  "description": "Aplicación para el registro de compras, control de cuotas de tarjetas de crédito, asignación de gastos y generación de reportes de cobro en PDF y Excel.",
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
