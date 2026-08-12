@@ -10,18 +10,23 @@ import {
   query,
 } from 'firebase/firestore';
 import { CreditCard, Responsible, Purchase, MonthlyStatement, AdminFeeAllocation } from '../types';
+import appletConfigJson from '../../firebase-applet-config.json';
 
-// Read Firebase config from VITE_ environment variables
+const appletConfig = (appletConfigJson || {}) as Record<string, string>;
+
+// Read Firebase config from VITE_ environment variables or AI Studio applet config
 const env = (import.meta as any).env || {};
 
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.VITE_FIREBASE_APP_ID,
+  apiKey: env.VITE_FIREBASE_API_KEY || appletConfig.apiKey,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId,
+  appId: env.VITE_FIREBASE_APP_ID || appletConfig.appId,
 };
+
+const databaseId = appletConfig.firestoreDatabaseId || undefined;
 
 // Check if Firebase keys are provided
 export const isFirebaseConfigured = Boolean(
@@ -34,7 +39,7 @@ const app = isFirebaseConfigured
   ? (!getApps().length ? initializeApp(firebaseConfig) : getApp())
   : null;
 
-export const db = app ? getFirestore(app) : null;
+export const db = app ? (databaseId ? getFirestore(app, databaseId) : getFirestore(app)) : null;
 
 // Realtime listeners for Firestore collections
 export function subscribeToFirestoreData(onUpdate: (data: {
