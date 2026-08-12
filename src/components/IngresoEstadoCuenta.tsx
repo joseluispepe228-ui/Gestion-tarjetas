@@ -52,14 +52,14 @@ export const IngresoEstadoCuenta: React.FC<IngresoEstadoCuentaProps> = ({
     setTimeout(() => setSavedSuccessCard(null), 2500);
   };
 
-  // Compute calculated installments sum for each card in selectedMonth
+  // Compute calculated installments sum for each card in selectedMonth (using effectiveAmountToPay per responsible)
   const getCardInstallmentsSum = (cardId: string) => {
     let sum = 0;
     purchases.forEach((p) => {
       if (p.cardId === cardId) {
         const inst = getInstallmentForMonth(p, selectedMonth);
         if (inst) {
-          sum += inst.installmentAmount;
+          sum += inst.effectiveAmountToPay;
         }
       }
     });

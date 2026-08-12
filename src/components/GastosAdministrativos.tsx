@@ -31,12 +31,12 @@ export const GastosAdministrativos: React.FC<GastosAdministrativosProps> = ({
   const activeCard = cards.find((c) => c.id === selectedCardId) || cards[0];
   const activeStatement = statements.find((s) => s.cardId === selectedCardId && s.month === selectedMonth);
 
-  // Calculate sum of active installments for this card & month
+  // Calculate sum of active installments for this card & month (using effectiveAmountToPay)
   const activeInstallmentsSum = purchases.reduce((sum, p) => {
     if (p.cardId === selectedCardId) {
       const inst = getInstallmentForMonth(p, selectedMonth);
       if (inst) {
-        return sum + inst.installmentAmount;
+        return sum + inst.effectiveAmountToPay;
       }
     }
     return sum;
@@ -44,6 +44,20 @@ export const GastosAdministrativos: React.FC<GastosAdministrativosProps> = ({
 
   const statementTotal = activeStatement ? activeStatement.statementTotal : 0;
   const differenceAmount = Math.max(0, statementTotal - activeInstallmentsSum);
+
+  // Calculate total admin fees across ALL cards for the selected month
+  const totalAdminFeesAllCards = cards.reduce((total, c) => {
+    const cardStmt = statements.find((s) => s.cardId === c.id && s.month === selectedMonth);
+    const stmtVal = cardStmt ? cardStmt.statementTotal : 0;
+    const cardInstSum = purchases.reduce((s, p) => {
+      if (p.cardId === c.id) {
+        const inst = getInstallmentForMonth(p, selectedMonth);
+        if (inst) return s + inst.effectiveAmountToPay;
+      }
+      return s;
+    }, 0);
+    return total + Math.max(0, stmtVal - cardInstSum);
+  }, 0);
 
   // Load existing allocations into local state when card or month changes
   React.useEffect(() => {
@@ -102,7 +116,7 @@ export const GastosAdministrativos: React.FC<GastosAdministrativosProps> = ({
       if (p.cardId === selectedCardId) {
         const inst = getInstallmentForMonth(p, selectedMonth);
         if (inst) {
-          respSumMap[p.responsibleId] = (respSumMap[p.responsibleId] || 0) + inst.installmentAmount;
+          respSumMap[p.responsibleId] = (respSumMap[p.responsibleId] || 0) + inst.effectiveAmountToPay;
         }
       }
     });
@@ -200,13 +214,13 @@ export const GastosAdministrativos: React.FC<GastosAdministrativosProps> = ({
         })}
       </div>
 
-      {/* Reconciliation Summary Dashboard for active card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Reconciliation Summary Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Step 1: Estado de Cuenta */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              1. Estado de Cuentas
+              1. Estado de Cuentas ({activeCard.name})
             </div>
             <div className="text-2xl font-extrabold text-slate-800">{formatCurrency(statementTotal)}</div>
             <p className="text-xs text-slate-500 mt-1">
@@ -222,19 +236,32 @@ export const GastosAdministrativos: React.FC<GastosAdministrativosProps> = ({
               2. Suma de Cuotas ({formatMonthYear(selectedMonth)})
             </div>
             <div className="text-2xl font-extrabold text-slate-800">{formatCurrency(activeInstallmentsSum)}</div>
-            <p className="text-xs text-slate-500 mt-1">Suma de compras en cuota para este mes</p>
+            <p className="text-xs text-slate-500 mt-1">Suma de compras asignadas para este mes</p>
           </div>
         </div>
 
-        {/* Step 3: Diferencia a Repartir */}
+        {/* Step 3: Diferencia a Repartir (Tarjeta Activa) */}
         <div className="bg-indigo-50/80 p-5 rounded-2xl border border-indigo-200 shadow-sm flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">
-              Diferencia (Gasto Administrativo)
+              Diferencia ({activeCard.name})
             </div>
             <div className="text-2xl font-extrabold text-indigo-900">{formatCurrency(differenceAmount)}</div>
             <p className="text-xs text-indigo-600 mt-1 font-medium">
-              Valor a asignar entre los responsables
+              Gasto admin a repartir en esta tarjeta
+            </p>
+          </div>
+        </div>
+
+        {/* Step 4: Suma Total Gastos Administrativos (Todas las Tarjetas) */}
+        <div className="bg-amber-50/90 p-5 rounded-2xl border border-amber-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">
+              Suma Gastos Admin ({cards.length} Tarjetas)
+            </div>
+            <div className="text-2xl font-extrabold text-amber-900">{formatCurrency(totalAdminFeesAllCards)}</div>
+            <p className="text-xs text-amber-700 mt-1 font-medium">
+              Total gastos administrativos del mes ({formatMonthYear(selectedMonth)})
             </p>
           </div>
         </div>
