@@ -101,6 +101,79 @@ export function getInstallmentForMonth(purchase: Purchase, targetMonthStr: strin
   return null;
 }
 
+export interface PurchaseStatus {
+  status: 'future' | 'active' | 'last_installment' | 'completed';
+  currentInstallment: number;
+  totalInstallments: number;
+  startMonth: string;
+  lastMonth: string;
+  badgeLabel: string;
+  isCompleted: boolean;
+  isLastInstallment: boolean;
+}
+
+/**
+ * Calculates the current payment status of a purchase for a given reference month YYYY-MM
+ */
+export function getPurchaseStatus(purchase: Purchase, referenceMonthStr: string = getCurrentMonthStr()): PurchaseStatus {
+  const startMonth = purchase.firstPaymentMonth || purchase.purchaseDate.substring(0, 7);
+  const totalInstallments = Math.max(1, purchase.installmentsCount || 1);
+  const lastMonth = addMonthsToMonthStr(startMonth, totalInstallments - 1);
+  const diff = getMonthDifference(startMonth, referenceMonthStr);
+
+  if (diff < 0) {
+    return {
+      status: 'future',
+      currentInstallment: 0,
+      totalInstallments,
+      startMonth,
+      lastMonth,
+      badgeLabel: `Inicia en ${formatMonthYear(startMonth)}`,
+      isCompleted: false,
+      isLastInstallment: false,
+    };
+  }
+
+  if (diff < totalInstallments - 1) {
+    const currentInstallment = diff + 1;
+    return {
+      status: 'active',
+      currentInstallment,
+      totalInstallments,
+      startMonth,
+      lastMonth,
+      badgeLabel: `Cuota ${currentInstallment} de ${totalInstallments}`,
+      isCompleted: false,
+      isLastInstallment: false,
+    };
+  }
+
+  if (diff === totalInstallments - 1) {
+    return {
+      status: 'last_installment',
+      currentInstallment: totalInstallments,
+      totalInstallments,
+      startMonth,
+      lastMonth,
+      badgeLabel: `¡Última cuota! (${totalInstallments} de ${totalInstallments})`,
+      isCompleted: false,
+      isLastInstallment: true,
+    };
+  }
+
+  // diff >= totalInstallments
+  return {
+    status: 'completed',
+    currentInstallment: totalInstallments,
+    totalInstallments,
+    startMonth,
+    lastMonth,
+    badgeLabel: `PAGADA TOTALMENTE (Fin: ${formatMonthYear(lastMonth)})`,
+    isCompleted: true,
+    isLastInstallment: false,
+  };
+}
+
 /**
  * Generate quick unique IDs
  */
