@@ -10,9 +10,18 @@ import {
   query,
 } from 'firebase/firestore';
 import { CreditCard, Responsible, Purchase, MonthlyStatement, AdminFeeAllocation } from '../types';
-import appletConfigJson from '../../firebase-applet-config.json';
-
-const appletConfig = (appletConfigJson || {}) as Record<string, string>;
+// Safely load applet config if present in the environment (e.g. AI Studio container)
+let appletConfig: Record<string, string> = {};
+try {
+  // @ts-ignore
+  const appletModules = import.meta.glob('../../firebase-applet-config.json', { eager: true });
+  const key = Object.keys(appletModules)[0];
+  if (key && (appletModules[key] as any)?.default) {
+    appletConfig = (appletModules[key] as any).default;
+  }
+} catch {
+  // Fallback gracefully when building on Vercel or local without applet config file
+}
 
 // Read Firebase config from VITE_ environment variables or AI Studio applet config
 const env = (import.meta as any).env || {};
