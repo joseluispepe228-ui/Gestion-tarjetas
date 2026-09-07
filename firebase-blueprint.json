@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "CreditCard": {
+      "title": "CreditCard",
+      "description": "Credit card configured in the application",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "bank": { "type": "string" },
+        "color": { "type": "string" },
+        "bgColor": { "type": "string" },
+        "badgeBg": { "type": "string" },
+        "badgeText": { "type": "string" },
+        "isDefault": { "type": "boolean" }
+      },
+      "required": ["id", "name", "color", "bgColor", "badgeBg", "badgeText"]
+    },
+    "Responsible": {
+      "title": "Responsible",
+      "description": "Family member or person responsible for credit card expenses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "relationship": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "color": { "type": "string" },
+        "avatarBg": { "type": "string" }
+      },
+      "required": ["id", "name", "color", "avatarBg"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Installment credit card purchase registered in Module 1",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "cardId": { "type": "string" },
+        "purchaseDate": { "type": "string" },
+        "firstPaymentMonth": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "description": { "type": "string" },
+        "installmentsCount": { "type": "number" },
+        "installmentAmount": { "type": "number" },
+        "responsibleId": { "type": "string" },
+        "percentageToPay": { "type": "number" },
+        "receiptUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "cardId",
+        "purchaseDate",
+        "firstPaymentMonth",
+        "totalAmount",
+        "description",
+        "installmentsCount",
+        "installmentAmount",
+        "responsibleId",
+        "percentageToPay",
+        "createdAt"
+      ]
+    },
+    "MonthlyStatement": {
+      "title": "MonthlyStatement",
+      "description": "Monthly statement total for a credit card in Module 2",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "cardId": { "type": "string" },
+        "month": { "type": "string" },
+        "statementTotal": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "cardId", "month", "statementTotal", "updatedAt"]
+    },
+    "AdminFeeAllocation": {
+      "title": "AdminFeeAllocation",
+      "description": "Administrative fee allocation per responsible in Module 3",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "cardId": { "type": "string" },
+        "month": { "type": "string" },
+        "responsibleId": { "type": "string" },
+        "allocatedAmount": { "type": "number" }
+      },
+      "required": ["id", "cardId", "month", "responsibleId", "allocatedAmount"]
+    },
+    "NewPurchase": {
+      "title": "NewPurchase",
+      "description": "Draft or log purchase in Module 6",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "purchaseDate": { "type": "string" },
+        "cardId": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "responsibleId": { "type": "string" },
+        "installmentsCount": { "type": "number" },
+        "receiptUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "purchaseDate",
+        "cardId",
+        "totalAmount",
+        "responsibleId",
+        "installmentsCount",
+        "description",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/cards/{cardId}": {
+      "schema": "CreditCard",
+      "description": "Credit cards stored in the system"
+    },
+    "/responsibles/{responsibleId}": {
+      "schema": "Responsible",
+      "description": "Family members and responsibles"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Purchases and installments in Module 1"
+    },
+    "/statements/{statementId}": {
+      "schema": "MonthlyStatement",
+      "description": "Monthly statements in Module 2"
+    },
+    "/adminFees/{feeId}": {
+      "schema": "AdminFeeAllocation",
+      "description": "Administrative fee prorating in Module 3"
+    },
+    "/newPurchases/{newPurchaseId}": {
+      "schema": "NewPurchase",
+      "description": "Log of new purchases in Module 6"
+    }
+  }
+}

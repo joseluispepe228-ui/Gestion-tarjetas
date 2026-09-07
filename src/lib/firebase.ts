@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  initializeFirestore,
   getFirestore,
   collection,
   doc,
@@ -7,11 +8,10 @@ import {
   setDoc,
   deleteDoc,
   onSnapshot,
-  query,
+  Firestore,
 } from 'firebase/firestore';
 import { CreditCard, Responsible, Purchase, MonthlyStatement, AdminFeeAllocation, NewPurchase } from '../types';
-
-// ... (keep rest)
+import { AppState } from './storage';
 
 // Safely load applet config if present in the environment (e.g. AI Studio container)
 let appletConfig: Record<string, string> = {};
@@ -51,7 +51,42 @@ const app = isFirebaseConfigured
   ? (!getApps().length ? initializeApp(firebaseConfig) : getApp())
   : null;
 
-export const db = app ? (databaseId ? getFirestore(app, databaseId) : getFirestore(app)) : null;
+/**
+ * Initialize Firestore with ignoreUndefinedProperties enabled so missing optional
+ * fields (like receiptUrl, notes, relationship) never fail document writes.
+ */
+let firestoreInstance: Firestore | null = null;
+if (app) {
+  try {
+    firestoreInstance = initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+    }, databaseId);
+  } catch {
+    firestoreInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+  }
+}
+
+export const db = firestoreInstance;
+
+/**
+ * Sanitizes any data object before sending to Firestore:
+ * Strips keys with undefined values recursively to avoid Firestore invalid-argument errors.
+ */
+export function cleanForFirestore<T extends Record<string, any>>(obj: T): T {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result: any = Array.isArray(obj) ? [] : {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) {
+      continue; // Skip undefined completely
+    }
+    if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      result[key] = cleanForFirestore(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as T;
+}
 
 // Realtime listeners for Firestore collections
 export function subscribeToFirestoreData(onUpdate: (data: {
@@ -109,84 +144,165 @@ export function subscribeToFirestoreData(onUpdate: (data: {
 }
 
 // Helpers to save individual items to Firestore
-export async function syncPurchaseToFirestore(purchase: Purchase) {
-  if (!db) return;
+export async function syncPurchaseToFirestore(purchase: Purchase): Promise<boolean> {
+  if (!db) return false;
   try {
-    await setDoc(doc(db, 'purchases', purchase.id), purchase);
+    const cleaned = cleanForFirestore(purchase);
+    await setDoc(doc(db, 'purchases', purchase.id), cleaned);
+    console.log(`[Firestore] Compra sincronizada exitosamente: ${purchase.id} (${purchase.description})`);
+    return true;
   } catch (error) {
     console.error('Error syncing purchase to Firestore:', error);
+    return false;
   }
 }
 
-export async function deletePurchaseFromFirestore(id: string) {
-  if (!db) return;
+export async function deletePurchaseFromFirestore(id: string): Promise<boolean> {
+  if (!db) return false;
   try {
     await deleteDoc(doc(db, 'purchases', id));
+    console.log(`[Firestore] Compra eliminada de Firestore: ${id}`);
+    return true;
   } catch (error) {
     console.error('Error deleting purchase from Firestore:', error);
+    return false;
   }
 }
 
-export async function syncStatementToFirestore(statement: MonthlyStatement) {
-  if (!db) return;
+export async function syncStatementToFirestore(statement: MonthlyStatement): Promise<boolean> {
+  if (!db) return false;
   try {
-    await setDoc(doc(db, 'statements', statement.id), statement);
+    const cleaned = cleanForFirestore(statement);
+    await setDoc(doc(db, 'statements', statement.id), cleaned);
+    return true;
   } catch (error) {
     console.error('Error syncing statement to Firestore:', error);
+    return false;
   }
 }
 
-export async function syncAdminFeeToFirestore(fee: AdminFeeAllocation) {
-  if (!db) return;
+export async function syncAdminFeeToFirestore(fee: AdminFeeAllocation): Promise<boolean> {
+  if (!db) return false;
   try {
-    await setDoc(doc(db, 'adminFees', fee.id), fee);
+    const cleaned = cleanForFirestore(fee);
+    await setDoc(doc(db, 'adminFees', fee.id), cleaned);
+    return true;
   } catch (error) {
     console.error('Error syncing admin fee to Firestore:', error);
+    return false;
   }
 }
 
-export async function syncResponsibleToFirestore(resp: Responsible) {
-  if (!db) return;
+export async function syncResponsibleToFirestore(resp: Responsible): Promise<boolean> {
+  if (!db) return false;
   try {
-    await setDoc(doc(db, 'responsibles', resp.id), resp);
+    const cleaned = cleanForFirestore(resp);
+    await setDoc(doc(db, 'responsibles', resp.id), cleaned);
+    return true;
   } catch (error) {
     console.error('Error syncing responsible to Firestore:', error);
+    return false;
   }
 }
 
-export async function deleteResponsibleFromFirestore(id: string) {
-  if (!db) return;
+export async function deleteResponsibleFromFirestore(id: string): Promise<boolean> {
+  if (!db) return false;
   try {
     await deleteDoc(doc(db, 'responsibles', id));
+    return true;
   } catch (error) {
     console.error('Error deleting responsible from Firestore:', error);
+    return false;
   }
 }
 
-export async function syncCardToFirestore(card: CreditCard) {
-  if (!db) return;
+export async function syncCardToFirestore(card: CreditCard): Promise<boolean> {
+  if (!db) return false;
   try {
-    await setDoc(doc(db, 'cards', card.id), card);
+    const cleaned = cleanForFirestore(card);
+    await setDoc(doc(db, 'cards', card.id), cleaned);
+    return true;
   } catch (error) {
     console.error('Error syncing card to Firestore:', error);
+    return false;
   }
 }
 
-export async function syncNewPurchaseToFirestore(p: NewPurchase) {
-  if (!db) return;
+export async function syncNewPurchaseToFirestore(p: NewPurchase): Promise<boolean> {
+  if (!db) return false;
   try {
-    await setDoc(doc(db, 'newPurchases', p.id), p);
+    const cleaned = cleanForFirestore(p);
+    await setDoc(doc(db, 'newPurchases', p.id), cleaned);
+    return true;
   } catch (error) {
     console.error('Error syncing new purchase to Firestore:', error);
+    return false;
   }
 }
 
-export async function deleteNewPurchaseFromFirestore(id: string) {
-  if (!db) return;
+export async function deleteNewPurchaseFromFirestore(id: string): Promise<boolean> {
+  if (!db) return false;
   try {
     await deleteDoc(doc(db, 'newPurchases', id));
+    return true;
   } catch (error) {
     console.error('Error deleting new purchase from Firestore:', error);
+    return false;
   }
 }
+
+/**
+ * Bulk sync all data from local AppState to Firestore:
+ * Uploads all cards, responsibles, purchases, statements, fees, and new purchases
+ */
+export async function syncAllDataToFirestore(state: AppState): Promise<{
+  successCount: number;
+  totalCount: number;
+  success: boolean;
+}> {
+  if (!db) return { successCount: 0, totalCount: 0, success: false };
+
+  let successCount = 0;
+  const totalCount =
+    state.cards.length +
+    state.responsibles.length +
+    state.purchases.length +
+    state.statements.length +
+    state.adminFees.length +
+    (state.newPurchases?.length || 0);
+
+  try {
+    for (const c of state.cards) {
+      await setDoc(doc(db, 'cards', c.id), cleanForFirestore(c));
+      successCount++;
+    }
+    for (const r of state.responsibles) {
+      await setDoc(doc(db, 'responsibles', r.id), cleanForFirestore(r));
+      successCount++;
+    }
+    for (const p of state.purchases) {
+      await setDoc(doc(db, 'purchases', p.id), cleanForFirestore(p));
+      successCount++;
+    }
+    for (const s of state.statements) {
+      await setDoc(doc(db, 'statements', s.id), cleanForFirestore(s));
+      successCount++;
+    }
+    for (const f of state.adminFees) {
+      await setDoc(doc(db, 'adminFees', f.id), cleanForFirestore(f));
+      successCount++;
+    }
+    for (const np of (state.newPurchases || [])) {
+      await setDoc(doc(db, 'newPurchases', np.id), cleanForFirestore(np));
+      successCount++;
+    }
+
+    console.log(`[Firestore] Sincronización total exitosa: ${successCount} registros subidos.`);
+    return { successCount, totalCount, success: true };
+  } catch (error) {
+    console.error('Error in syncAllDataToFirestore:', error);
+    return { successCount, totalCount, success: false };
+  }
+}
+
 

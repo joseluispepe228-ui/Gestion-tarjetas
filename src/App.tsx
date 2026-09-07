@@ -19,11 +19,15 @@ import {
   deleteResponsibleFromFirestore,
   syncNewPurchaseToFirestore,
   deleteNewPurchaseFromFirestore,
+  syncAllDataToFirestore,
 } from './lib/firebase';
+import { CheckCircle2, AlertCircle, RefreshCw, X } from 'lucide-react';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
   const [activeTab, setActiveTab] = useState<ActiveTab>('compras');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Auto-persist state changes to localStorage
   useEffect(() => {
@@ -35,14 +39,48 @@ export default function App() {
     if (!isFirebaseConfigured) return;
 
     const unsubscribe = subscribeToFirestoreData((data) => {
-      setAppState((prev) => ({
-        cards: data.cards || prev.cards,
-        responsibles: data.responsibles || prev.responsibles,
-        purchases: data.purchases || prev.purchases,
-        statements: data.statements || prev.statements,
-        adminFees: data.adminFees || prev.adminFees,
-        newPurchases: data.newPurchases || prev.newPurchases,
-      }));
+      setAppState((prev) => {
+        // Smart merge for purchases: prevents losing any purchase entered locally that hasn't reached Firestore
+        let mergedPurchases = prev.purchases;
+        if (data.purchases !== undefined) {
+          const firestoreIds = new Set(data.purchases.map((p) => p.id));
+          // Find any purchase present locally that is not in Firestore (excluding dummy p-1.. seeds)
+          const unsyncedLocals = prev.purchases.filter(
+            (localP) => !firestoreIds.has(localP.id) && !localP.id.startsWith('p-')
+          );
+
+          // If there are unsynced local purchases (e.g. from previous failed writes), push them to Firestore!
+          if (unsyncedLocals.length > 0) {
+            console.log(`[Sync] Rescatando y subiendo ${unsyncedLocals.length} compras locales a Firestore...`);
+            unsyncedLocals.forEach((lp) => {
+              syncPurchaseToFirestore(lp);
+            });
+          }
+
+          // Combined: local unsynced purchases + all firestore purchases
+          mergedPurchases = [...unsyncedLocals, ...data.purchases];
+        }
+
+        // Smart merge for new purchases (Module 6)
+        let mergedNewPurchases = prev.newPurchases || [];
+        if (data.newPurchases !== undefined) {
+          const firestoreIds = new Set(data.newPurchases.map((p) => p.id));
+          const unsyncedNew = (prev.newPurchases || []).filter((np) => !firestoreIds.has(np.id));
+          if (unsyncedNew.length > 0) {
+            unsyncedNew.forEach((np) => syncNewPurchaseToFirestore(np));
+          }
+          mergedNewPurchases = [...unsyncedNew, ...data.newPurchases];
+        }
+
+        return {
+          cards: data.cards && data.cards.length > 0 ? data.cards : prev.cards,
+          responsibles: data.responsibles && data.responsibles.length > 0 ? data.responsibles : prev.responsibles,
+          purchases: mergedPurchases,
+          statements: data.statements !== undefined ? data.statements : prev.statements,
+          adminFees: data.adminFees !== undefined ? data.adminFees : prev.adminFees,
+          newPurchases: mergedNewPurchases,
+        };
+      });
     });
 
     return () => unsubscribe();
@@ -52,7 +90,7 @@ export default function App() {
   const handleAddPurchase = (purchase: Purchase) => {
     setAppState((prev) => ({
       ...prev,
-      purchases: [purchase, ...prev.purchases],
+      purchases: [purchase, ...prev.purchases.filter((p) => p.id !== purchase.id)],
     }));
     syncPurchaseToFirestore(purchase);
   };
@@ -73,6 +111,14 @@ export default function App() {
       }));
       deletePurchaseFromFirestore(id);
     }
+  };
+
+  const handleDeleteMultiplePurchases = (ids: string[]) => {
+    setAppState((prev) => ({
+      ...prev,
+      purchases: prev.purchases.filter((p) => !ids.includes(p.id)),
+    }));
+    ids.forEach((id) => deletePurchaseFromFirestore(id));
   };
 
   // Handlers for Statements
@@ -200,6 +246,39 @@ export default function App() {
     exportBackupJSON(appState);
   };
 
+  // Force Cloud Sync of all data
+  const handleSyncCloud = async () => {
+    if (!isFirebaseConfigured) {
+      setSyncFeedback({ message: 'Firebase no está configurado en esta instancia.', type: 'error' });
+      setTimeout(() => setSyncFeedback(null), 4000);
+      return;
+    }
+    setIsSyncing(true);
+    setSyncFeedback({ message: 'Sincronizando todas las compras y datos con Firestore...', type: 'info' });
+    try {
+      const result = await syncAllDataToFirestore(appState);
+      if (result.success) {
+        setSyncFeedback({
+          message: `¡Sincronización exitosa! ${result.successCount} registros sincronizados con la nube. Ahora son visibles en todos tus dispositivos.`,
+          type: 'success',
+        });
+      } else {
+        setSyncFeedback({
+          message: 'Hubo un problema al sincronizar. Comprueba tu conexión a Internet.',
+          type: 'error',
+        });
+      }
+    } catch (e: any) {
+      setSyncFeedback({
+        message: 'Error al contactar con la nube: ' + (e?.message || 'error desconocido'),
+        type: 'error',
+      });
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900">
       {/* Top Header */}
@@ -208,7 +287,37 @@ export default function App() {
         setActiveTab={setActiveTab}
         onExportBackup={handleExportBackup}
         onResetSeed={handleResetSeedData}
+        onSyncCloud={handleSyncCloud}
+        isSyncing={isSyncing}
       />
+
+      {/* Cloud Sync Notification Banner */}
+      {syncFeedback && (
+        <div
+          className={`px-4 py-2.5 text-xs font-medium border-b flex items-center justify-between transition-all ${
+            syncFeedback.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : syncFeedback.type === 'error'
+              ? 'bg-rose-50 text-rose-800 border-rose-200'
+              : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+          }`}
+        >
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {syncFeedback.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+              {syncFeedback.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />}
+              {syncFeedback.type === 'info' && <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />}
+              <span>{syncFeedback.message}</span>
+            </div>
+            <button
+              onClick={() => setSyncFeedback(null)}
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer ml-4"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
@@ -220,6 +329,9 @@ export default function App() {
             onAddPurchase={handleAddPurchase}
             onUpdatePurchase={handleUpdatePurchase}
             onDeletePurchase={handleDeletePurchase}
+            onDeleteMultiplePurchases={handleDeleteMultiplePurchases}
+            onSyncCloud={handleSyncCloud}
+            isSyncing={isSyncing}
           />
         )}
 

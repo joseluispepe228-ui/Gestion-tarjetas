@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, FileText, Calculator, Users, BarChart3, CreditCard as CardIcon, Download, RotateCcw, Database, Cloud, Smartphone, X, CheckCircle2, Share, ShoppingBag } from 'lucide-react';
+import { ShoppingCart, FileText, Calculator, Users, BarChart3, CreditCard as CardIcon, Download, RotateCcw, Database, Cloud, Smartphone, X, CheckCircle2, Share, ShoppingBag, RefreshCw } from 'lucide-react';
 import { isFirebaseConfigured } from '../lib/firebase';
 
 export type ActiveTab = 'compras' | 'estado-cuenta' | 'gastos-admin' | 'responsables' | 'reportes' | 'nuevas-compras';
@@ -9,6 +9,8 @@ interface NavbarProps {
   setActiveTab: (tab: ActiveTab) => void;
   onExportBackup: () => void;
   onResetSeed: () => void;
+  onSyncCloud?: () => void;
+  isSyncing?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,6 +18,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   onExportBackup,
   onResetSeed,
+  onSyncCloud,
+  isSyncing = false,
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
@@ -99,9 +103,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Gestion Tarjetas De Credito
                 </h1>
                 {isFirebaseConfigured ? (
-                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2 py-0.5 rounded-full" title="Conectado a Firebase Firestore en tiempo real">
-                    <Cloud className="w-3 h-3 text-emerald-600" /> Firebase
-                  </span>
+                  <button
+                    onClick={onSyncCloud}
+                    disabled={isSyncing}
+                    title="Conectado a Firebase Firestore en tiempo real. Clic para forzar sincronización de todos los datos."
+                    className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Cloud className={`w-3 h-3 ${isSyncing ? 'animate-pulse text-emerald-600' : 'text-emerald-600'}`} />
+                    <span>{isSyncing ? 'Sincronizando...' : 'Firebase Nube'}</span>
+                  </button>
                 ) : (
                   <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold px-2 py-0.5 rounded-full" title="Usando almacenamiento local de navegador">
                     <Database className="w-3 h-3 text-amber-600" /> Local Storage

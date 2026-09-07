@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CreditCard, Responsible, Purchase } from '../types';
 import { formatCurrency, formatMonthYear, getCurrentMonthStr, generateId, getPurchaseStatus } from '../lib/utils';
-import { Plus, Search, Trash2, Edit2, ShoppingCart, Percent, Camera, Image as ImageIcon, Eye, X, Download, AlertCircle, CheckCircle2, Sparkles, Filter } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, ShoppingCart, Percent, Camera, Image as ImageIcon, Eye, X, Download, AlertCircle, CheckCircle2, Sparkles, Filter, RefreshCw, Cloud } from 'lucide-react';
 
 interface IngresoComprasProps {
   cards: CreditCard[];
@@ -10,6 +10,9 @@ interface IngresoComprasProps {
   onAddPurchase: (purchase: Purchase) => void;
   onUpdatePurchase: (purchase: Purchase) => void;
   onDeletePurchase: (id: string) => void;
+  onDeleteMultiplePurchases?: (ids: string[]) => void;
+  onSyncCloud?: () => void;
+  isSyncing?: boolean;
 }
 
 export const IngresoCompras: React.FC<IngresoComprasProps> = ({
@@ -19,6 +22,9 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
   onAddPurchase,
   onUpdatePurchase,
   onDeletePurchase,
+  onDeleteMultiplePurchases,
+  onSyncCloud,
+  isSyncing = false,
 }) => {
   const currentMonth = getCurrentMonthStr();
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -184,10 +190,14 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
     if (completedPurchases.length === 0) return;
     if (
       window.confirm(
-        `¿Deseas eliminar las ${completedPurchases.length} compras que ya han sido pagadas totalmente? Esta acción liberará espacio de tu lista de cuotas.`
+        `¿Deseas eliminar las ${completedPurchases.length} compras que ya han sido pagadas totalmente? Esta acción las eliminará de la lista y de la nube.`
       )
     ) {
-      completedPurchases.forEach((item) => onDeletePurchase(item.purchase.id));
+      if (onDeleteMultiplePurchases) {
+        onDeleteMultiplePurchases(completedPurchases.map((item) => item.purchase.id));
+      } else {
+        completedPurchases.forEach((item) => onDeletePurchase(item.purchase.id));
+      }
     }
   };
 
@@ -225,14 +235,28 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
             Registra las compras realizadas con tarjeta de crédito, indica la cantidad de cuotas y el familiar responsable para el cálculo mensual.
           </p>
         </div>
-        <button
-          id="btn-nueva-compra"
-          onClick={handleOpenNew}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-xl shadow-sm transition-colors text-sm cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Registrar Nueva Compra</span>
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {onSyncCloud && (
+            <button
+              id="btn-sync-compras"
+              onClick={onSyncCloud}
+              disabled={isSyncing}
+              title="Sincronizar compras con la nube Firestore"
+              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3.5 py-2.5 rounded-xl transition-colors text-xs cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-indigo-600' : 'text-slate-600'}`} />
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Nube'}</span>
+            </button>
+          )}
+          <button
+            id="btn-nueva-compra"
+            onClick={handleOpenNew}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-xl shadow-sm transition-colors text-sm cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Registrar Nueva Compra</span>
+          </button>
+        </div>
       </div>
 
       {/* Alert Banner for Completed Purchases */}
