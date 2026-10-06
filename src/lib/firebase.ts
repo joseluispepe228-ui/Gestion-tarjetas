@@ -100,17 +100,13 @@ export function subscribeToFirestoreData(onUpdate: (data: {
   if (!db) return () => {};
 
   const unsubCards = onSnapshot(collection(db, 'cards'), (snapshot) => {
-    if (!snapshot.empty) {
-      const cards = snapshot.docs.map((doc) => doc.data() as CreditCard);
-      onUpdate({ cards });
-    }
+    const cards = snapshot.docs.map((doc) => doc.data() as CreditCard);
+    onUpdate({ cards });
   }, (err) => console.warn('Firestore cards listener warning:', err));
 
   const unsubResp = onSnapshot(collection(db, 'responsibles'), (snapshot) => {
-    if (!snapshot.empty) {
-      const responsibles = snapshot.docs.map((doc) => doc.data() as Responsible);
-      onUpdate({ responsibles });
-    }
+    const responsibles = snapshot.docs.map((doc) => doc.data() as Responsible);
+    onUpdate({ responsibles });
   }, (err) => console.warn('Firestore responsibles listener warning:', err));
 
   const unsubPurchases = onSnapshot(collection(db, 'purchases'), (snapshot) => {

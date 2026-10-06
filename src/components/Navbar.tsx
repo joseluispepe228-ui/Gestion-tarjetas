@@ -23,8 +23,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // Check if running in standalone mode (already installed PWA)
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    setIsStandalone(standalone);
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -124,14 +131,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div className="flex items-center gap-2">
             {/* Install App Button */}
-            <button
-              onClick={handleInstallClick}
-              title="Descargar e instalar la aplicación en tu teléfono"
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>Descargar App</span>
-            </button>
+            {!isStandalone && (
+              <button
+                onClick={handleInstallClick}
+                title="Instalar la aplicación en la pantalla de inicio de tu teléfono o escritorio"
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Instalar App</span>
+              </button>
+            )}
 
             <button
               onClick={onExportBackup}
@@ -188,12 +197,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <Smartphone className="w-6 h-6" />
-                </div>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/pwa-192x192.png"
+                  alt="App Icon"
+                  className="w-11 h-11 rounded-xl shadow-xs object-cover"
+                />
                 <div>
-                  <h3 className="font-bold text-slate-800 text-base">Instalar en tu Teléfono</h3>
+                  <h3 className="font-bold text-slate-800 text-base">Instalar Aplicación PWA</h3>
                   <p className="text-xs text-slate-500">Gestion Tarjetas De Credito</p>
                 </div>
               </div>
@@ -207,7 +218,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <div className="space-y-3 text-xs text-slate-700">
               <p className="font-semibold text-slate-800">
-                Para descargar la app en tu teléfono y tener acceso directo en tu pantalla de inicio:
+                Puedes instalar esta app directamente en tu teléfono móvil o escritorio sin pasar por la tienda de apps:
               </p>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">

@@ -20,7 +20,9 @@ import {
   syncNewPurchaseToFirestore,
   deleteNewPurchaseFromFirestore,
   syncAllDataToFirestore,
+  syncCardToFirestore,
 } from './lib/firebase';
+import { DEFAULT_CARDS } from './data/initialData';
 import { CheckCircle2, AlertCircle, RefreshCw, X } from 'lucide-react';
 
 export default function App() {
@@ -72,8 +74,27 @@ export default function App() {
           mergedNewPurchases = [...unsyncedNew, ...data.newPurchases];
         }
 
+        // Smart merge for cards: ALWAYS guarantee DEFAULT_CARDS (Ripley, Falabella, Cencosud) exist
+        const cardMap = new Map<string, CreditCard>();
+        DEFAULT_CARDS.forEach((c) => cardMap.set(c.id, c));
+        prev.cards.forEach((c) => cardMap.set(c.id, { ...(cardMap.get(c.id) || {}), ...c }));
+        if (data.cards && data.cards.length > 0) {
+          data.cards.forEach((c) => cardMap.set(c.id, { ...(cardMap.get(c.id) || {}), ...c }));
+        }
+        const mergedCards = Array.from(cardMap.values());
+
+        // Rescate: If any default card is missing from Firestore, sync it up now
+        if (data.cards !== undefined) {
+          const firestoreCardIds = new Set(data.cards.map((c) => c.id));
+          mergedCards.forEach((c) => {
+            if (!firestoreCardIds.has(c.id)) {
+              syncCardToFirestore(c);
+            }
+          });
+        }
+
         return {
-          cards: data.cards && data.cards.length > 0 ? data.cards : prev.cards,
+          cards: mergedCards,
           responsibles: data.responsibles && data.responsibles.length > 0 ? data.responsibles : prev.responsibles,
           purchases: mergedPurchases,
           statements: data.statements !== undefined ? data.statements : prev.statements,

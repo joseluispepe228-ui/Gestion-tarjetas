@@ -28,7 +28,24 @@ export function loadAppState(): AppState {
     const rawFees = localStorage.getItem(STORAGE_KEYS.ADMIN_FEES);
     const rawNewPur = localStorage.getItem(STORAGE_KEYS.NEW_PURCHASES);
 
-    const cards = rawCards ? JSON.parse(rawCards) : DEFAULT_CARDS;
+    // Guarantee all DEFAULT_CARDS (Ripley, Falabella, Cencosud) are always present
+    const cardMap = new Map<string, CreditCard>();
+    DEFAULT_CARDS.forEach((c) => cardMap.set(c.id, c));
+    if (rawCards) {
+      try {
+        const parsed = JSON.parse(rawCards);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((c: CreditCard) => {
+            if (c && c.id) {
+              cardMap.set(c.id, { ...(cardMap.get(c.id) || {}), ...c });
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error parsing cards from localStorage:', e);
+      }
+    }
+    const cards = Array.from(cardMap.values());
     const responsibles = rawResp ? JSON.parse(rawResp) : DEFAULT_RESPONSIBLES;
     const purchases = rawPur ? JSON.parse(rawPur) : getSeedPurchases();
     const statements = rawStat ? JSON.parse(rawStat) : getSeedStatements();

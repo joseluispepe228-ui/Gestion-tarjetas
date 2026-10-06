@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CreditCard, Responsible, Purchase } from '../types';
 import { formatCurrency, formatMonthYear, getCurrentMonthStr, generateId, getPurchaseStatus } from '../lib/utils';
-import { Plus, Search, Trash2, Edit2, ShoppingCart, Percent, Camera, Image as ImageIcon, Eye, X, Download, AlertCircle, CheckCircle2, Sparkles, Filter, RefreshCw, Cloud } from 'lucide-react';
+import { optimizeReceiptImage } from '../lib/imageOptimizer';
+import { Plus, Search, Trash2, Edit2, ShoppingCart, Percent, Camera, Image as ImageIcon, Eye, X, Download, AlertCircle, CheckCircle2, Sparkles, Filter, RefreshCw, Cloud, Loader2 } from 'lucide-react';
 
 interface IngresoComprasProps {
   cards: CreditCard[];
@@ -48,6 +49,9 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
 
   // Image Modal State
   const [viewingReceipt, setViewingReceipt] = useState<{ title: string; url: string } | null>(null);
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false);
+  const [imageSizeInfo, setImageSizeInfo] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // Filters
   const [filterCard, setFilterCard] = useState<string>('all');
@@ -73,37 +77,24 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
     }
   };
 
-  const handleReceiptFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const MAX_SIZE = 900;
-        if (width > height && width > MAX_SIZE) {
-          height = Math.round((height * MAX_SIZE) / width);
-          width = MAX_SIZE;
-        } else if (height > MAX_SIZE) {
-          width = Math.round((width * MAX_SIZE) / height);
-          height = MAX_SIZE;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          setReceiptUrl(dataUrl);
-        }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+    setIsOptimizingImage(true);
+    setImageError(null);
+
+    try {
+      const result = await optimizeReceiptImage(file);
+      setReceiptUrl(result.dataUrl);
+      setImageSizeInfo(`${result.sizeKb} KB`);
+    } catch (err: any) {
+      console.error('Error optimizando imagen:', err);
+      setImageError(err.message || 'Error al procesar la imagen.');
+    } finally {
+      setIsOptimizingImage(false);
+      e.target.value = '';
+    }
   };
 
   const resetForm = () => {
@@ -119,6 +110,8 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
     setResponsibleId(responsibles[0]?.id || '');
     setPercentageToPay(100);
     setReceiptUrl(undefined);
+    setImageSizeInfo(null);
+    setImageError(null);
     setNotes('');
   };
 
@@ -512,9 +505,17 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
                 <Camera className="w-4 h-4 text-indigo-600" />
                 <span>Fotografiar o Adjuntar Boleta / Comprobante</span>
+                <span className="text-[10px] font-normal text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Sin límite de tamaño
+                </span>
               </label>
 
-              {receiptUrl ? (
+              {isOptimizingImage ? (
+                <div className="flex items-center gap-3 py-3 px-4 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-xs font-medium animate-pulse">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  <span>Procesando y optimizando imagen de alta resolución... (preparando para la nube)</span>
+                </div>
+              ) : receiptUrl ? (
                 <div className="flex items-center gap-4">
                   <div className="relative group w-24 h-24 rounded-lg overflow-hidden border border-slate-300 bg-black">
                     <img src={receiptUrl} alt="Boleta" className="w-full h-full object-cover" />
@@ -528,7 +529,7 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
-                      ✓ Boleta adjuntada correctamente
+                      ✓ Boleta optimizada correctamente {imageSizeInfo ? `(${imageSizeInfo})` : ''}
                     </p>
                     <div className="flex gap-2">
                       <button
@@ -538,9 +539,22 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
                       >
                         Ver boleta
                       </button>
+                      <label className="text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer underline">
+                        Cambiar foto
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleReceiptFile}
+                          className="hidden"
+                        />
+                      </label>
                       <button
                         type="button"
-                        onClick={() => setReceiptUrl(undefined)}
+                        onClick={() => {
+                          setReceiptUrl(undefined);
+                          setImageSizeInfo(null);
+                        }}
                         className="text-xs text-rose-600 hover:text-rose-800 font-medium cursor-pointer"
                       >
                         Eliminar foto
@@ -549,21 +563,30 @@ export const IngresoCompras: React.FC<IngresoComprasProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <label className="flex items-center gap-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors shadow-xs">
-                    <Camera className="w-4 h-4 text-indigo-600" />
-                    <span>Tomar Foto / Subir Boleta</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleReceiptFile}
-                      className="hidden"
-                    />
-                  </label>
-                  <span className="text-xs text-slate-400">
-                    Opcional. Puedes usar la cámara de tu teléfono o subir una imagen.
-                  </span>
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <label className="flex items-center gap-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors shadow-xs">
+                      <Camera className="w-4 h-4 text-indigo-600" />
+                      <span>Tomar Foto / Subir Boleta</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleReceiptFile}
+                        className="hidden"
+                      />
+                    </label>
+                    <span className="text-xs text-slate-500">
+                      Cualquier tamaño admitido (fotos de cámaras de alta resolución o capturas).
+                    </span>
+                  </div>
+
+                  {imageError && (
+                    <div className="flex items-center gap-1.5 text-xs text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{imageError}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
