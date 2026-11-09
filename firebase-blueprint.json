@@ -116,6 +116,18 @@
         "description",
         "createdAt"
       ]
+    },
+    "DeletedPurchase": {
+      "title": "DeletedPurchase",
+      "description": "Tombstone record of permanently deleted purchases to prevent resurrection across devices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "deletedAt": { "type": "string" },
+        "description": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["id", "deletedAt"]
     }
   },
   "firestore": {
@@ -130,6 +142,10 @@
     "/purchases/{purchaseId}": {
       "schema": "Purchase",
       "description": "Purchases and installments in Module 1"
+    },
+    "/deletedPurchases/{deletedId}": {
+      "schema": "DeletedPurchase",
+      "description": "Tombstone records of deleted purchases across devices"
     },
     "/statements/{statementId}": {
       "schema": "MonthlyStatement",

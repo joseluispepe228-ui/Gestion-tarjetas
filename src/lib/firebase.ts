@@ -7,11 +7,12 @@ import {
   getDocs,
   setDoc,
   deleteDoc,
+  writeBatch,
   onSnapshot,
   Firestore,
 } from 'firebase/firestore';
 import { CreditCard, Responsible, Purchase, MonthlyStatement, AdminFeeAllocation, NewPurchase } from '../types';
-import { AppState } from './storage';
+import { AppState, getDeletedPurchaseIds, recordDeletedPurchaseIds } from './storage';
 
 // Safely load applet config if present in the environment (e.g. AI Studio container)
 let appletConfig: Record<string, string> = {};
@@ -96,6 +97,7 @@ export function subscribeToFirestoreData(onUpdate: (data: {
   statements?: MonthlyStatement[];
   adminFees?: AdminFeeAllocation[];
   newPurchases?: NewPurchase[];
+  deletedPurchaseIds?: string[];
 }) => void) {
   if (!db) return () => {};
 
@@ -129,6 +131,12 @@ export function subscribeToFirestoreData(onUpdate: (data: {
     onUpdate({ newPurchases });
   }, (err) => console.warn('Firestore newPurchases listener warning:', err));
 
+  const unsubDeletedPurchases = onSnapshot(collection(db, 'deletedPurchases'), (snapshot) => {
+    const deletedPurchaseIds = snapshot.docs.map((doc) => doc.id);
+    recordDeletedPurchaseIds(deletedPurchaseIds);
+    onUpdate({ deletedPurchaseIds });
+  }, (err) => console.warn('Firestore deletedPurchases listener warning:', err));
+
   return () => {
     unsubCards();
     unsubResp();
@@ -136,12 +144,19 @@ export function subscribeToFirestoreData(onUpdate: (data: {
     unsubStatements();
     unsubFees();
     unsubNewPurchases();
+    unsubDeletedPurchases();
   };
 }
 
 // Helpers to save individual items to Firestore
 export async function syncPurchaseToFirestore(purchase: Purchase): Promise<boolean> {
   if (!db) return false;
+  // If this purchase was marked as deleted, do NOT re-upload it
+  const deletedIds = getDeletedPurchaseIds();
+  if (deletedIds.has(purchase.id)) {
+    console.warn(`[Firestore] Compra ${purchase.id} está en la lista de eliminadas. Se omite subida.`);
+    return false;
+  }
   try {
     const cleaned = cleanForFirestore(purchase);
     await setDoc(doc(db, 'purchases', purchase.id), cleaned);
@@ -156,11 +171,43 @@ export async function syncPurchaseToFirestore(purchase: Purchase): Promise<boole
 export async function deletePurchaseFromFirestore(id: string): Promise<boolean> {
   if (!db) return false;
   try {
-    await deleteDoc(doc(db, 'purchases', id));
-    console.log(`[Firestore] Compra eliminada de Firestore: ${id}`);
+    recordDeletedPurchaseIds([id]);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'purchases', id));
+    batch.set(doc(db, 'deletedPurchases', id), {
+      id,
+      deletedAt: new Date().toISOString(),
+    });
+    await batch.commit();
+    console.log(`[Firestore] Compra eliminada permanentemente de Firestore: ${id}`);
     return true;
   } catch (error) {
     console.error('Error deleting purchase from Firestore:', error);
+    return false;
+  }
+}
+
+export async function deleteMultiplePurchasesFromFirestore(ids: string[]): Promise<boolean> {
+  if (!db || ids.length === 0) return false;
+  try {
+    recordDeletedPurchaseIds(ids);
+    const chunkSize = 200;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        batch.delete(doc(db, 'purchases', id));
+        batch.set(doc(db, 'deletedPurchases', id), {
+          id,
+          deletedAt: new Date().toISOString(),
+        });
+      }
+      await batch.commit();
+    }
+    console.log(`[Firestore] ${ids.length} compras eliminadas permanentemente en lote`);
+    return true;
+  } catch (error) {
+    console.error('Error deleting multiple purchases from Firestore:', error);
     return false;
   }
 }
@@ -258,14 +305,18 @@ export async function syncAllDataToFirestore(state: AppState): Promise<{
 }> {
   if (!db) return { successCount: 0, totalCount: 0, success: false };
 
+  const deletedIds = getDeletedPurchaseIds();
+  const validPurchases = state.purchases.filter((p) => !deletedIds.has(p.id));
+  const validNewPurchases = (state.newPurchases || []).filter((np) => !deletedIds.has(np.id));
+
   let successCount = 0;
   const totalCount =
     state.cards.length +
     state.responsibles.length +
-    state.purchases.length +
+    validPurchases.length +
     state.statements.length +
     state.adminFees.length +
-    (state.newPurchases?.length || 0);
+    validNewPurchases.length;
 
   try {
     for (const c of state.cards) {
@@ -276,7 +327,7 @@ export async function syncAllDataToFirestore(state: AppState): Promise<{
       await setDoc(doc(db, 'responsibles', r.id), cleanForFirestore(r));
       successCount++;
     }
-    for (const p of state.purchases) {
+    for (const p of validPurchases) {
       await setDoc(doc(db, 'purchases', p.id), cleanForFirestore(p));
       successCount++;
     }

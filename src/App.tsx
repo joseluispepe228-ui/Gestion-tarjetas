@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, loadAppState, saveAppState, resetAppStateToSeed, exportBackupJSON } from './lib/storage';
+import { AppState, loadAppState, saveAppState, resetAppStateToSeed, exportBackupJSON, getDeletedPurchaseIds, recordDeletedPurchaseIds } from './lib/storage';
 import { Purchase, MonthlyStatement, AdminFeeAllocation, Responsible, CreditCard, NewPurchase } from './types';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { IngresoCompras } from './components/IngresoCompras';
@@ -13,6 +13,7 @@ import {
   subscribeToFirestoreData,
   syncPurchaseToFirestore,
   deletePurchaseFromFirestore,
+  deleteMultiplePurchasesFromFirestore,
   syncStatementToFirestore,
   syncAdminFeeToFirestore,
   syncResponsibleToFirestore,
@@ -42,39 +43,26 @@ export default function App() {
 
     const unsubscribe = subscribeToFirestoreData((data) => {
       setAppState((prev) => {
-        // Smart merge for purchases: prevents losing any purchase entered locally that hasn't reached Firestore
-        let mergedPurchases = prev.purchases;
+        // Collect deleted IDs from Firestore real-time snapshot and local storage
+        if (data.deletedPurchaseIds && data.deletedPurchaseIds.length > 0) {
+          recordDeletedPurchaseIds(data.deletedPurchaseIds);
+        }
+        const deletedIds = getDeletedPurchaseIds();
+
+        // 1. Authoritative purchases sync:
+        // Firestore is the source of truth across all devices. Filter out any tombstoned purchases.
+        let mergedPurchases = prev.purchases.filter((p) => !deletedIds.has(p.id));
         if (data.purchases !== undefined) {
-          const firestoreIds = new Set(data.purchases.map((p) => p.id));
-          // Find any purchase present locally that is not in Firestore (excluding dummy p-1.. seeds)
-          const unsyncedLocals = prev.purchases.filter(
-            (localP) => !firestoreIds.has(localP.id) && !localP.id.startsWith('p-')
-          );
-
-          // If there are unsynced local purchases (e.g. from previous failed writes), push them to Firestore!
-          if (unsyncedLocals.length > 0) {
-            console.log(`[Sync] Rescatando y subiendo ${unsyncedLocals.length} compras locales a Firestore...`);
-            unsyncedLocals.forEach((lp) => {
-              syncPurchaseToFirestore(lp);
-            });
-          }
-
-          // Combined: local unsynced purchases + all firestore purchases
-          mergedPurchases = [...unsyncedLocals, ...data.purchases];
+          mergedPurchases = data.purchases.filter((p) => !deletedIds.has(p.id));
         }
 
-        // Smart merge for new purchases (Module 6)
-        let mergedNewPurchases = prev.newPurchases || [];
+        // 2. Authoritative new purchases (Module 6) sync:
+        let mergedNewPurchases = (prev.newPurchases || []).filter((np) => !deletedIds.has(np.id));
         if (data.newPurchases !== undefined) {
-          const firestoreIds = new Set(data.newPurchases.map((p) => p.id));
-          const unsyncedNew = (prev.newPurchases || []).filter((np) => !firestoreIds.has(np.id));
-          if (unsyncedNew.length > 0) {
-            unsyncedNew.forEach((np) => syncNewPurchaseToFirestore(np));
-          }
-          mergedNewPurchases = [...unsyncedNew, ...data.newPurchases];
+          mergedNewPurchases = data.newPurchases.filter((np) => !deletedIds.has(np.id));
         }
 
-        // Smart merge for cards: ALWAYS guarantee DEFAULT_CARDS (Ripley, Falabella, Cencosud) exist
+        // 3. Smart merge for cards: ALWAYS guarantee DEFAULT_CARDS (Ripley, Falabella, Cencosud) exist
         const cardMap = new Map<string, CreditCard>();
         DEFAULT_CARDS.forEach((c) => cardMap.set(c.id, c));
         prev.cards.forEach((c) => cardMap.set(c.id, { ...(cardMap.get(c.id) || {}), ...c }));
@@ -124,22 +112,25 @@ export default function App() {
     syncPurchaseToFirestore(updated);
   };
 
-  const handleDeletePurchase = (id: string) => {
+  const handleDeletePurchase = async (id: string) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar esta compra registrada?')) {
+      recordDeletedPurchaseIds([id]);
       setAppState((prev) => ({
         ...prev,
         purchases: prev.purchases.filter((p) => p.id !== id),
       }));
-      deletePurchaseFromFirestore(id);
+      await deletePurchaseFromFirestore(id);
     }
   };
 
-  const handleDeleteMultiplePurchases = (ids: string[]) => {
+  const handleDeleteMultiplePurchases = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    recordDeletedPurchaseIds(ids);
     setAppState((prev) => ({
       ...prev,
       purchases: prev.purchases.filter((p) => !ids.includes(p.id)),
     }));
-    ids.forEach((id) => deletePurchaseFromFirestore(id));
+    await deleteMultiplePurchasesFromFirestore(ids);
   };
 
   // Handlers for Statements
@@ -251,6 +242,7 @@ export default function App() {
 
   const handleDeleteNewPurchase = (id: string) => {
     if (window.confirm('¿Deseas eliminar este registro de compra de la bitácora?')) {
+      recordDeletedPurchaseIds([id]);
       setAppState((prev) => ({
         ...prev,
         newPurchases: (prev.newPurchases || []).filter((p) => p.id !== id),

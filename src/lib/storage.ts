@@ -8,7 +8,36 @@ const STORAGE_KEYS = {
   STATEMENTS: 'cc_control_statements_v1',
   ADMIN_FEES: 'cc_control_admin_fees_v1',
   NEW_PURCHASES: 'cc_control_new_purchases_v1',
+  DELETED_PURCHASE_IDS: 'cc_control_deleted_purchases_v1',
 };
+
+export function getDeletedPurchaseIds(): Set<string> {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.DELETED_PURCHASE_IDS) : null;
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr);
+      }
+    }
+  } catch (e) {
+    console.error('Error reading deleted purchase IDs from localStorage:', e);
+  }
+  return new Set();
+}
+
+export function recordDeletedPurchaseIds(ids: string[]): void {
+  try {
+    if (!ids || ids.length === 0 || typeof localStorage === 'undefined') return;
+    const current = getDeletedPurchaseIds();
+    ids.forEach((id) => {
+      if (id) current.add(id);
+    });
+    localStorage.setItem(STORAGE_KEYS.DELETED_PURCHASE_IDS, JSON.stringify(Array.from(current)));
+  } catch (e) {
+    console.error('Error recording deleted purchase IDs to localStorage:', e);
+  }
+}
 
 export interface AppState {
   cards: CreditCard[];
@@ -45,12 +74,19 @@ export function loadAppState(): AppState {
         console.error('Error parsing cards from localStorage:', e);
       }
     }
+    const deletedPurchaseIds = getDeletedPurchaseIds();
     const cards = Array.from(cardMap.values());
     const responsibles = rawResp ? JSON.parse(rawResp) : DEFAULT_RESPONSIBLES;
-    const purchases = rawPur ? JSON.parse(rawPur) : getSeedPurchases();
+    const rawPurchases = rawPur ? JSON.parse(rawPur) : getSeedPurchases();
+    const purchases = (Array.isArray(rawPurchases) ? rawPurchases : []).filter(
+      (p: Purchase) => p && p.id && !deletedPurchaseIds.has(p.id)
+    );
     const statements = rawStat ? JSON.parse(rawStat) : getSeedStatements();
     const adminFees = rawFees ? JSON.parse(rawFees) : getSeedAdminFees();
-    const newPurchases = rawNewPur ? JSON.parse(rawNewPur) : [];
+    const rawNewPurchases = rawNewPur ? JSON.parse(rawNewPur) : [];
+    const newPurchases = (Array.isArray(rawNewPurchases) ? rawNewPurchases : []).filter(
+      (np: NewPurchase) => np && np.id && !deletedPurchaseIds.has(np.id)
+    );
 
     return {
       cards,
@@ -62,10 +98,11 @@ export function loadAppState(): AppState {
     };
   } catch (error) {
     console.error('Error loading state from localStorage:', error);
+    const deletedPurchaseIds = getDeletedPurchaseIds();
     return {
       cards: DEFAULT_CARDS,
       responsibles: DEFAULT_RESPONSIBLES,
-      purchases: getSeedPurchases(),
+      purchases: getSeedPurchases().filter((p) => !deletedPurchaseIds.has(p.id)),
       statements: getSeedStatements(),
       adminFees: getSeedAdminFees(),
       newPurchases: [],
@@ -75,12 +112,16 @@ export function loadAppState(): AppState {
 
 export function saveAppState(state: AppState): void {
   try {
+    const deletedPurchaseIds = getDeletedPurchaseIds();
+    const cleanPurchases = state.purchases.filter((p) => !deletedPurchaseIds.has(p.id));
+    const cleanNewPurchases = (state.newPurchases || []).filter((np) => !deletedPurchaseIds.has(np.id));
+
     localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(state.cards));
     localStorage.setItem(STORAGE_KEYS.RESPONSIBLES, JSON.stringify(state.responsibles));
-    localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(state.purchases));
+    localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(cleanPurchases));
     localStorage.setItem(STORAGE_KEYS.STATEMENTS, JSON.stringify(state.statements));
     localStorage.setItem(STORAGE_KEYS.ADMIN_FEES, JSON.stringify(state.adminFees));
-    localStorage.setItem(STORAGE_KEYS.NEW_PURCHASES, JSON.stringify(state.newPurchases || []));
+    localStorage.setItem(STORAGE_KEYS.NEW_PURCHASES, JSON.stringify(cleanNewPurchases));
   } catch (error) {
     console.error('Error saving state to localStorage:', error);
   }
